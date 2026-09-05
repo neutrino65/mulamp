@@ -1,6 +1,2 @@
 .pio
-.vscode
-/include/
-/lib/
-/stuff/
-/test/README
+.vscode/
