@@ -22,7 +22,8 @@ ESP8266WiFiMulti WiFiMulti;
 #define RELAY_PIN D1
 #define BUTTON_PIN D5
 
-bool device_relay_status = true;  // this will store the current relay's status as high and low
+bool device_relay_status = false;   // this will store the current relay's status as true -> HIGH & false -> LOW.
+bool remote_relay_status = false;   // this will store the relay's status received via mqtt broker.
 
 #define ESP_DEVICE_ID "1"
 
@@ -68,21 +69,24 @@ yDFx8r7i9vIJU5HS3moZLkYWAOilMaV9N56A9Bgb6dNcHkvg3NoaYA==
 -----END CERTIFICATE-----
 )EOF";
 
-bool connectToWiFi() {
-    int failedAttemptsNum = 0;
-    Serial.print("Connecting to WiFi");
-    while ((WiFiMulti.run() != WL_CONNECTED && ++failedAttemptsNum <= 10)) {
-        delay(1000);
-        Serial.print(".");
-    }
 
-    if (failedAttemptsNum >= 10){
-        Serial.println("Failed to connect to WiFi.");
-        return false;
-    }
+// -------------------- WIFI ---------------------
 
-    return true;
-} 
+// bool connectToWiFi() {
+//     int failedAttemptsNum = 0;
+//     Serial.print("Connecting to WiFi");
+//     while ((WiFiMulti.run() != WL_CONNECTED && ++failedAttemptsNum <= 10)) {
+//         delay(1000);
+//         Serial.print(".");
+//     }
+
+//     if (failedAttemptsNum >= 10){
+//         Serial.println("Failed to connect to WiFi.");
+//         return false;
+//     }
+
+//     return true;
+// } 
 
 bool waitForWiFi(unsigned long timeoutMS = 10000) {  // take 10 sec to connect to wifi, if no connecting then it will loop out so other function can execute.
   unsigned long wifi_start = millis();
@@ -92,6 +96,9 @@ bool waitForWiFi(unsigned long timeoutMS = 10000) {  // take 10 sec to connect t
   }
   return false;
 }
+
+
+// --------------- NTP and clock syncronization ------------------
 
 // void setClock() {  // this is blocking method to configure NTP time sync.
 //   configTime(0, 0, "pool.ntp.org", "time.nist.gov");
@@ -135,6 +142,8 @@ String getCurrentTime() {   // this function is to get current time
 }
 
 
+// ---------------- MQTT -----------------
+
 bool connectToMqttOnce() {
     BearSSL::X509List serverTrustedCA(cert);
     espClient.setTrustAnchors(&serverTrustedCA);
@@ -149,7 +158,7 @@ bool connectToMqttOnce() {
         Serial.println("Connected to MQTT broker");
         mqtt_client.subscribe(MQTT_TOPIC, 1);    // this 1 is the qos.
         // Publish message upon successful connection
-        mqtt_client.publish(MQTT_TOPIC, "Hi SERVER I'm device 1 ^_^");  // the true is for retained message = true
+        //mqtt_client.publish(MQTT_TOPIC, "Hi SERVER I'm device 1 ^_^");  // the true is for retained message = true
         return true;
     } else {
         char err_buf[128];
@@ -164,7 +173,7 @@ bool connectToMqttOnce() {
 
 
 volatile bool msgReady = false;
-char latestMessage[128];
+char latestMessage[256];
 
 void mqttCallback(char *topic, byte *payload, unsigned int length) {
   size_t n = std::min<size_t>((size_t)length, sizeof(latestMessage)-1);
@@ -173,21 +182,108 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   msgReady = true;
 }
 
-// change the device relay status as per the broker's relay status
-void updateRelayStatus(const char* tmp_relay_status) {
-  if (device_relay_status && (strcmp(tmp_relay_status, "HIGH") == 0)) {
-    return;
-  } else if (!device_relay_status && (strcmp(tmp_relay_status, "LOW") == 0)) {
-    return;
-  } else {
-    device_relay_status = (strcmp(tmp_relay_status, "HIGH") == 0);   // strcmp when both str same then they return 0. thus this will make the device_relay_status as true if broker relay_status be HIGH.
-    return;
+// switch the device relay and change device_relay_status as per the broker's relay status.
+void updateDeviceRelay(const char* tmp_relay_status) {
+  // if (device_relay_status && (strcmp(tmp_relay_status, "HIGH") == 0)) {
+  //   return;
+  // } else if (!device_relay_status && (strcmp(tmp_relay_status, "LOW") == 0)) {
+  //   return;
+  // } else {
+  //   device_relay_status = (strcmp(tmp_relay_status, "HIGH") == 0);   // strcmp when both str same then they return 0. thus this will make the device_relay_status as true if broker relay_status be HIGH.
+  //   Serial.print("device_relay_status changes in updateDeviceRelay function: ");
+  //   Serial.println(device_relay_status ? "HIGH" : "LOW");
+
+  //   return;
+  // }
+
+  device_relay_status = (strcmp(tmp_relay_status, "HIGH") == 0);
+  digitalWrite(RELAY_PIN, device_relay_status ? HIGH : LOW);
+
+  Serial.print("Updated relay to ");
+  Serial.print(digitalRead(RELAY_PIN));
+  Serial.print(" & device_relay_status to :");
+  Serial.println(device_relay_status);
+  
+
+}
+
+
+// sending the device current relay's status to mqtt broker 
+void sendMqttDeviceRelayStatusMsg() {      // data will be sent in form of json to the broker.
+  if (mqtt_client.connected()) {
+  StaticJsonDocument<256> doc;
+  doc["device_id"] = ESP_DEVICE_ID;
+  doc["relay_status"] = device_relay_status ? "HIGH" : "LOW";
+  doc["timestamp"] = getCurrentTime();
+
+  String mqttPayload;
+  serializeJson(doc, mqttPayload);
+
+  mqtt_client.publish(MQTT_TOPIC, mqttPayload.c_str(), true);   // the 3rd argument (true) is for making this a retained message.
+  Serial.print("MQTT message sent: ");
+  Serial.println(mqttPayload);    // printing data which was sent to mqtt broker server.
   }
 }
 
 
+// --------------- Relay & Button ----------------
+bool isButtonPressed() {
+  return digitalRead(BUTTON_PIN) == LOW;
+}
+
+bool isRelayOn() {
+  return digitalRead(RELAY_PIN) == HIGH;
+}
+
+void switchOnTheRelay() {
+  Serial.println("Switching ON the Relay");
+  digitalWrite(RELAY_PIN, HIGH);
+}
+
+void switchOffTheRelay() {
+  Serial.println("Switching OFF the Relay");
+  digitalWrite(RELAY_PIN, LOW);
+}
+
+
+const unsigned long DEBOUNSE_MS = 50;
+int lastButtonRaw = HIGH;  // HIGH cuz input_pullup was used, as initial pullup state is HIGH.
+unsigned long lastDebounceTime = 0;
+bool lastPressedState = false;   // after debounce button pressed state
+
+void buttonToggleRelay() {   // this function check if the button is pressed and according to that toggle the relay on or off based on device_relay_status and also update the device_relay_status and send mqtt message to mqtt broker.
+  int raw = digitalRead(BUTTON_PIN);
+
+  if (raw != lastButtonRaw) {
+    // when raw button input changes, debounce timer reset and record new raw
+    lastDebounceTime = millis();
+    lastButtonRaw = raw;
+  }
+
+  if (millis() - lastDebounceTime > DEBOUNSE_MS) {
+    bool pressed = (raw == LOW);   // check if the button is in pressed state after debounce period ends.
+    if (pressed && !lastPressedState) {   // true when button is pressed and the last button pressed state was false.
+      device_relay_status = !device_relay_status;   // toggle the relay's state
+  
+      digitalWrite(RELAY_PIN, device_relay_status ? HIGH : LOW);
+
+      Serial.print("Button pressed. Relay now: ");
+      Serial.println(device_relay_status ? "ON" : "OFF");
+
+      Serial.println("Sending the updated relay state mqtt message: ");
+      sendMqttDeviceRelayStatusMsg();     // sending the updated device_relay_status to mqtt broker.
+    }
+    lastPressedState = pressed;   // updating the button's last pressed state.
+  }
+}
+
+
+
 void setup(){ 
   Serial.begin(115200);
+
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  pinMode(RELAY_PIN, OUTPUT);
 
   WiFi.mode(WIFI_STA);
   WiFiMulti.addAP(SSID, PASSWORD);
@@ -244,46 +340,34 @@ void loop() {
   // checking if there is any new message from mqtt broker and acting accordingly.
   if (msgReady) {
     msgReady = false;
-    Serial.println(latestMessage);
 
     // parsing the json data from the broker
     StaticJsonDocument<256> doc;
     // here doc is the destination buffer and latestMessage contain the raw json data
     DeserializationError err = deserializeJson(doc, latestMessage);  
+
     if (!err){
-      // json responce is like {"device_id":"1","relay_status":"LOW","timestamp":"2026-08-31 19:10:37"}
-      const char* device_id = doc["device_id"] | nullptr;   // using nullptr as if the key is not found then excvaddr error will occur causing "null dereference" and crashing the esp8266.
-      const char* relay_status = doc["relay_status"] | nullptr;
-      if (device_id) Serial.println(device_id);
-      if (relay_status) {
-        Serial.println(relay_status);
-        /*
-        First retrieve the mqtt broker's relay_status and compare that with device's relay_status.
-        if different then update the device's relay_status as per broker's relay_status.
-        when relay is turned on via button then publish the latest relay status to the broker server.
-        */
-        updateRelayStatus(relay_status);
+      char relayStatusBuf[16];   // this will contain the value of key "relay_status" from json that received from mqtt server.
+      char deviceIdBuf[16];        // this will contain the value of key "device_id" from json that received from mqtt server.
+      strlcpy(relayStatusBuf, doc["relay_status"].as<const char*>(), sizeof(relayStatusBuf));
+      strlcpy(deviceIdBuf, doc["device_id"].as<const char*>(), sizeof(deviceIdBuf));
+
+      // updating the device_relay_status when the mqtt broker's message received has other device's id.
+      if (strcmp(deviceIdBuf, ESP_DEVICE_ID) != 0) {
+        updateDeviceRelay(relayStatusBuf);    // updating the device_relay_status value as per the latest received mqtt message.
+        
+        Serial.print("this is latest message from another device: ");   // this will print the mqtt msg received from other device.
+        Serial.println(latestMessage);
       }
     }
   }
+  
 
-  if (device_relay_status) Serial.println("RELAY ON!");
+  yield();   // calling yield in the middle so the wifi module won't get suffocated and crashed the esp.
 
-  // sending json data to mqtt server
-  if (mqtt_client.connected()) {
-    // making json to send to mqtt broker server (testing rn).
-    JsonDocument doc;
-    doc["device_id"] = ESP_DEVICE_ID;
-    if (device_relay_status) doc["relay_status"] = "HIGH";
-    else if (!device_relay_status) doc["relay_status"] = "LOW";
-    doc["timestamp"] = getCurrentTime();
 
-    String mqttPayload;
-    serializeJson(doc, mqttPayload);
-
-    mqtt_client.publish(MQTT_TOPIC, mqttPayload.c_str(), true);
-  }
-
+  // switching the relay when button is pressed and send the mqtt msg to broker.
+  buttonToggleRelay();
 
 }
 
