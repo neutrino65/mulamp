@@ -23,7 +23,6 @@ ESP8266WiFiMulti WiFiMulti;
 #define BUTTON_PIN D5
 
 bool device_relay_status = false;   // this will store the current relay's status as true -> HIGH & false -> LOW.
-bool remote_relay_status = false;   // this will store the relay's status received via mqtt broker.
 
 #define ESP_DEVICE_ID "1"
 
@@ -31,7 +30,7 @@ bool remote_relay_status = false;   // this will store the relay's status receiv
 BearSSL::WiFiClientSecure espClient;
 PubSubClient mqtt_client(espClient);
 
-// SSL certificate for MQTT broker
+// SSL certificate for MQTT broker (HiveMQ)
 const char *cert PROGMEM = R"EOF(
 -----BEGIN CERTIFICATE-----
 MIIF9DCCA9ygAwIBAgIRAPJLbRf52a18scn+p4eCaZ8wDQYJKoZIhvcNAQELBQAw
@@ -118,7 +117,7 @@ bool waitForWiFi(unsigned long timeoutMS = 10000) {  // take 10 sec to connect t
 // }
 
 
-const unsigned long TIME_RETRY = 15000;
+const unsigned long NTP_TIME_RETRY = 15000;
 unsigned long timeRequestedAt = 0;
 bool timeSynced = false;
 
@@ -175,38 +174,13 @@ bool connectToMqttOnce() {
 volatile bool msgReady = false;
 char latestMessage[256];
 
+// mqtt callback is a function which runs whenever esp received a message from mqtt broker on the topic the esp has subscribed to.
 void mqttCallback(char *topic, byte *payload, unsigned int length) {
   size_t n = std::min<size_t>((size_t)length, sizeof(latestMessage)-1);
   memcpy(latestMessage, payload, n);
   latestMessage[n] = '\0';
   msgReady = true;
 }
-
-// switch the device relay and change device_relay_status as per the broker's relay status.
-void updateDeviceRelay(const char* tmp_relay_status) {
-  // if (device_relay_status && (strcmp(tmp_relay_status, "HIGH") == 0)) {
-  //   return;
-  // } else if (!device_relay_status && (strcmp(tmp_relay_status, "LOW") == 0)) {
-  //   return;
-  // } else {
-  //   device_relay_status = (strcmp(tmp_relay_status, "HIGH") == 0);   // strcmp when both str same then they return 0. thus this will make the device_relay_status as true if broker relay_status be HIGH.
-  //   Serial.print("device_relay_status changes in updateDeviceRelay function: ");
-  //   Serial.println(device_relay_status ? "HIGH" : "LOW");
-
-  //   return;
-  // }
-
-  device_relay_status = (strcmp(tmp_relay_status, "HIGH") == 0);
-  digitalWrite(RELAY_PIN, device_relay_status ? HIGH : LOW);
-
-  Serial.print("Updated relay to ");
-  Serial.print(digitalRead(RELAY_PIN));
-  Serial.print(" & device_relay_status to :");
-  Serial.println(device_relay_status);
-  
-
-}
-
 
 // sending the device current relay's status to mqtt broker 
 void sendMqttDeviceRelayStatusMsg() {      // data will be sent in form of json to the broker.
@@ -227,27 +201,9 @@ void sendMqttDeviceRelayStatusMsg() {      // data will be sent in form of json 
 
 
 // --------------- Relay & Button ----------------
-bool isButtonPressed() {
-  return digitalRead(BUTTON_PIN) == LOW;
-}
-
-bool isRelayOn() {
-  return digitalRead(RELAY_PIN) == HIGH;
-}
-
-void switchOnTheRelay() {
-  Serial.println("Switching ON the Relay");
-  digitalWrite(RELAY_PIN, HIGH);
-}
-
-void switchOffTheRelay() {
-  Serial.println("Switching OFF the Relay");
-  digitalWrite(RELAY_PIN, LOW);
-}
-
 
 const unsigned long DEBOUNSE_MS = 50;
-int lastButtonRaw = HIGH;  // HIGH cuz input_pullup was used, as initial pullup state is HIGH.
+int lastButtonRaw = HIGH;  // HIGH cuz input_pullup was used, as initial pullup state is HIGH. Thus when button get pressed this turn to LOW.
 unsigned long lastDebounceTime = 0;
 bool lastPressedState = false;   // after debounce button pressed state
 
@@ -278,6 +234,19 @@ void buttonToggleRelay() {   // this function check if the button is pressed and
 }
 
 
+// switching device's relay and change device_relay_status as per the broker's relay status.
+void updateDeviceRelay(const char* tmp_relay_status) {
+
+  device_relay_status = (strcmp(tmp_relay_status, "HIGH") == 0);
+  digitalWrite(RELAY_PIN, device_relay_status ? HIGH : LOW);
+
+  Serial.print("Updated relay to ");
+  Serial.print(digitalRead(RELAY_PIN));
+  Serial.print(" & device_relay_status to :");
+  Serial.println(device_relay_status);
+}
+
+
 
 void setup(){ 
   Serial.begin(115200);
@@ -293,6 +262,7 @@ void setup(){
   //     setClock();
   // }
 
+  Serial.println("Connecting to WiFi...");
   // connecting to wifi (blocking for 5 sec)
   if (!waitForWiFi(5000)) {
     Serial.println("WiFi timed out, continuing offline");
@@ -315,8 +285,8 @@ void loop() {
     if (isTimeSynced()) {
       timeSynced = true;
       Serial.println("NTP synced: " + getCurrentTime());
-    } else if (millis() - timeRequestedAt > TIME_RETRY) {
-      // retry requestTimeSync() every TIME_RETRY until synced
+    } else if (millis() - timeRequestedAt > NTP_TIME_RETRY) {
+      // retry requestTimeSync() every NTP_TIME_RETRY until synced
       Serial.println("NTP not ready, retyring requestTimeSync()");
       requestTimeSync();
     }
