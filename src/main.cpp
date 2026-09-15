@@ -3,7 +3,6 @@
 #include <WiFiClientSecure.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
-#include <algorithm>
 
 ESP8266WiFiMulti WiFiMulti;
 
@@ -67,6 +66,9 @@ M71DMi+y1+TRSJVClEMwvA4yL++7q9XZx5r5wBRWB4kQTKH5qyoZnDw7iiuh1lID
 yDFx8r7i9vIJU5HS3moZLkYWAOilMaV9N56A9Bgb6dNcHkvg3NoaYA==
 -----END CERTIFICATE-----
 )EOF";
+
+
+BearSSL::X509List serverTrustedCA(cert);
 
 
 // -------------------- WIFI ---------------------
@@ -144,30 +146,29 @@ String getCurrentTime() {   // this function is to get current time
 // ---------------- MQTT -----------------
 
 bool connectToMqttOnce() {
-    BearSSL::X509List serverTrustedCA(cert);
-    espClient.setTrustAnchors(&serverTrustedCA);
+  espClient.setTrustAnchors(&serverTrustedCA);
 
-    // checking if mqtt connection is already enstablished.
-    if (mqtt_client.connected()) return true;
+  // checking if mqtt connection is already enstablished.
+  if (mqtt_client.connected()) return true;
 
-    // doing single try to enstablish mqtt connection.
-    String client_id = "esp8266-client-" + String(WiFi.macAddress());
-    Serial.printf("Connecting to MQTT Broker as %s.....\n", client_id.c_str());
-    if (mqtt_client.connect(client_id.c_str(), MQTT_USER, MQTT_PASSWORD)) {
-        Serial.println("Connected to MQTT broker");
-        mqtt_client.subscribe(MQTT_TOPIC, 1);    // this 1 is the qos.
-        // Publish message upon successful connection
-        //mqtt_client.publish(MQTT_TOPIC, "Hi SERVER I'm device 1 ^_^");  // the true is for retained message = true
-        return true;
-    } else {
-        char err_buf[128];
-        espClient.getLastSSLError(err_buf, sizeof(err_buf));
-        Serial.print("Failed to connect to MQTT broker, rc=");
-        Serial.println(mqtt_client.state());
-        Serial.print("SSL error: ");
-        Serial.println(err_buf);
-        return false;
-    }
+  // doing single try to enstablish mqtt connection.
+  String client_id = "esp8266-client-" + String(WiFi.macAddress());
+  Serial.printf("Connecting to MQTT Broker as %s.....\n", client_id.c_str());
+  if (mqtt_client.connect(client_id.c_str(), MQTT_USER, MQTT_PASSWORD)) {
+      Serial.println("Connected to MQTT broker");
+      mqtt_client.subscribe(MQTT_TOPIC, 1);    // this 1 is the qos.
+      // Publish message upon successful connection
+      //mqtt_client.publish(MQTT_TOPIC, "Hi SERVER I'm device 1 ^_^");  // the true is for retained message = true
+      return true;
+  } else {
+      char err_buf[128];
+      espClient.getLastSSLError(err_buf, sizeof(err_buf));
+      Serial.print("Failed to connect to MQTT broker, rc=");
+      Serial.println(mqtt_client.state());
+      Serial.print("SSL error: ");
+      Serial.println(err_buf);
+      return false;
+  }
 }
 
 
@@ -209,7 +210,6 @@ bool lastPressedState = false;   // after debounce button pressed state
 
 void buttonToggleRelay() {   // this function check if the button is pressed and according to that toggle the relay on or off based on device_relay_status and also update the device_relay_status and send mqtt message to mqtt broker.
   int raw = digitalRead(BUTTON_PIN);
-
   if (raw != lastButtonRaw) {
     // when raw button input changes, debounce timer reset and record new raw
     lastDebounceTime = millis();
