@@ -231,7 +231,8 @@ void buttonToggleRelay() {   // this function check if the button is pressed and
       Serial.println(device_relay_status ? "ON" : "OFF");
 
       Serial.println("Sending the updated relay state mqtt message: ");
-      sendMqttDeviceRelayStatusMsg();     // sending the updated device_relay_status to mqtt broker.
+      // sending the updated device_relay_status to mqtt broker.
+      sendMqttDeviceRelayStatusMsg();     
     }
     lastPressedState = pressed;   // updating the button's last pressed state.
   }
@@ -564,6 +565,52 @@ void setup(){
     server.send(200, "application/json", responseJson);
     Serial.print("Sent ESP's current wifi connection status to browser >> ");
     Serial.println(responseJson.c_str());
+  });
+
+  // sending the relay's state to logo button
+  server.on("/api/relay/control", HTTP_POST, []() {
+    String body = server.arg("plain");
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, body);
+
+    if(!err) {
+      // get the state sent by the browser.
+      device_relay_status = doc["logo_button_pressed"].as<bool>();
+      // updating the state of relay on the device.
+      if (device_relay_status) updateDeviceRelay("HIGH");     // updateDeviceRelay takes HIGH (for true) and LOW (for false).
+      else updateDeviceRelay("LOW");
+      // sending the updated relay's status to MQTT Broker.
+      Serial.println("Sending the updated relay status (via Logo button) to MQTT Broker!");
+      sendMqttDeviceRelayStatusMsg();
+      // create response for browser.
+      JsonDocument responseDoc;
+      responseDoc["success"] = true;
+      responseDoc["logo_button_pressed"] = device_relay_status;
+      responseDoc["relay"] = device_relay_status;
+      String responseJson;
+      serializeJson(responseDoc, responseJson);
+      // sending the response to browser
+      server.send(200, "application/json", responseJson);
+      Serial.print("Logo button POST request -> ");
+      Serial.println(body);
+    } else {
+      server.send(400, "application/json", "{\"success\":flase,\"message\":\"Invalid Json\"}");
+      Serial.println("Error while deserializing POST request from browswer for /api/relay/control");
+    }
+  });
+
+  // getting the button's pressed state
+  server.on("/api/relay/status", HTTP_GET, []() {
+    JsonDocument doc;
+    doc["relay"] = device_relay_status;
+    
+    String responseJson;
+    serializeJson(doc, responseJson);
+
+    server.send(200, "application/json", responseJson);
+
+    Serial.print("Logo button GET request -> ");
+    Serial.println(responseJson);
   });
 
   // starting HTTP server

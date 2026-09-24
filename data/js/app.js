@@ -1,5 +1,6 @@
 const elements = {
   infoButton: document.querySelector("#infoButton"),
+  logoButton: document.querySelector("#logoButton"),
   closeModalButton: document.querySelector("#closeModalButton"),
   modalBackdrop: document.querySelector("#modalBackdrop"),
   modalTitle: document.querySelector("#modalTitle"),
@@ -20,10 +21,12 @@ let lastFocusedElement = null;
 document.addEventListener("DOMContentLoaded", () => {
   bindEvents();
   loadNetworks();
+  loadRelayState();
 });
 
 function bindEvents() {
   elements.infoButton.addEventListener("click", openDeviceInfo);
+  elements.logoButton.addEventListener("click", handleLogoButtonClick);
   elements.closeModalButton.addEventListener("click", closeModal);
   elements.refreshButton.addEventListener("click", loadNetworks);
   elements.manualForm.addEventListener("submit", handleManualSubmit);
@@ -43,6 +46,41 @@ function bindEvents() {
       closeModal();
     }
   });
+}
+
+async function loadRelayState() {
+  try {
+    const result = await getRelayStatus();
+    setLogoButtonState(Boolean(result.relay ?? result.logo_button_pressed));
+  } catch (error) {
+    console.error("Unable to fetch relay state:", error);
+  }
+}
+
+async function handleLogoButtonClick() {
+  const button = elements.logoButton;
+  const nextState = !button.classList.contains("is-pressed");
+
+  button.disabled = true;
+  button.classList.toggle("is-pressed", nextState);
+  button.setAttribute("aria-pressed", String(nextState));
+
+  try {
+    const result = await updateRelayState(nextState);
+    const confirmedState = Boolean(result.relay ?? result.logo_button_pressed);
+    setLogoButtonState(confirmedState);
+  } catch (error) {
+    button.classList.toggle("is-pressed", !nextState);
+    button.setAttribute("aria-pressed", String(!nextState));
+    console.error("Unable to change relay state:", error);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function setLogoButtonState(pressed) {
+  elements.logoButton.classList.toggle("is-pressed", Boolean(pressed));
+  elements.logoButton.setAttribute("aria-pressed", String(Boolean(pressed)));
 }
 
 async function loadNetworks() {
@@ -161,7 +199,7 @@ async function checkEspInternetStatus() {
   } catch (error) {
     status.textContent = "Unable to check";
     status.className = "info-value status-disconnected";
-    ssid.textContent = "ESP8266 did not respond.";
+    ssid.textContent = "ESP did not respond.";
     console.error(error);
   } finally {
     button.disabled = false;

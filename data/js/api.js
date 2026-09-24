@@ -18,6 +18,8 @@ const mockNetworks = [
   { ssid: "Weak_Signal", rssi: -86, security: "WPA2", channel: 13 }
 ];
 
+let mockRelayState = false;
+
 const mockDevice = {
   device: "ESP8266 NodeMCU 1.0",
   owner: "nini",
@@ -76,6 +78,34 @@ async function getInternetStatus() {
   }
 
   return requestJson("/api/wifi/status");
+}
+
+async function getRelayStatus() {
+  if (USE_MOCK_API) {
+    await wait(350);
+    return {
+      relay: mockRelayState
+    };
+  }
+
+  return requestJson("/api/relay/status");
+}
+
+async function updateRelayState(pressed) {
+  if (USE_MOCK_API) {
+    await wait(450);
+    mockRelayState = Boolean(pressed);
+    return {
+      success: true,
+      logo_button_pressed: mockRelayState,
+      relay: mockRelayState
+    };
+  }
+
+  return requestJson("/api/relay/control", {
+    method: "POST",
+    body: JSON.stringify({ logo_button_pressed: Boolean(pressed) })
+  });
 }
 
 async function submitWifiCredentials(ssid, password) {

@@ -94,9 +94,30 @@ input:focus-visible {
   place-items: center;
   border-radius: 14px;
   background: var(--green);
+  color: var(--ink);
   font-size: 14px;
   letter-spacing: -0.04em;
   font-weight: 800;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
+}
+
+.brand-mark:hover {
+  transform: translate(-2px, -2px);
+}
+
+.brand-mark:active,
+.brand-mark.is-pressed {
+  transform: translate(4px, 4px);
+  box-shadow: 2px 3px 0 var(--ink), 0 0 7px rgba(73, 214, 59, 0.7), inset 0 0 9px rgba(255, 255, 255, 0.42);
+}
+
+.brand-mark.is-pressed {
+  background: #55e947;
+}
+
+.brand-mark:disabled {
+  cursor: wait;
 }
 
 .icon-button,
