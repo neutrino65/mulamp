@@ -389,7 +389,6 @@ int loadWifiCredsToAP(){
 
 
 
-
 // =============================================
 
 void setup(){ 
@@ -403,14 +402,7 @@ void setup(){
   WiFi.mode(WIFI_AP_STA);                     // running the wifi in AP + STA dual mode.
   WiFi.softAP("mulamp-wifi");                 // setting up ESP's wifi ssid.
 
-  // WiFiMulti.addAP(SSID, PASSWORD);
-
-  // // this is blocking way to sync NTP time.
-  // if (connectToWiFi()) {
-  //     setClock();
-  // }
-
-  // adding the wifi creds which are saved in ESP's flash memory (LittleFS) to WiFiMulti's AP.
+  // adding the wifi creds if saved in ESP's flash memory (LittleFS) to WiFiMulti's AP. If not creds found then user have to setup wifi cred using WifiAPWebPortal.
   loadWifiCredsToAP();
 
   // connecting to wifi (blocking for 5 sec).
@@ -577,6 +569,7 @@ void setup(){
   // starting HTTP server
   server.begin();
 }
+
 
 void loop() {
   // running the WiFiAPWebPortal's HTTP server's callback function. this webserver run on local n/w created by esp and does not require internet connectivity and used for setting up wifi creds to enable the esp to connect to wifi for internet.
