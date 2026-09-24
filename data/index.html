@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#ffd21f" />
+  <title>ESP8266 Wi-Fi Manager</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div class="brand-mark" aria-label="Wi-Fi manager">MULAMP</div>
+      <button class="icon-button" id="infoButton" aria-label="Show device information">i</button>
+    </header>
+
+    <section class="hero">
+      <h1>Save your<br />WiFi creds here.</h1>
+      <p class="intro">Connect your device to a nearby network</p>
+    </section>
+
+    <section class="credential-card" aria-labelledby="credentialsTitle">
+      <div class="section-heading">
+        <h2 id="credentialsTitle">Connect manually</h2>
+      </div>
+
+      <form id="manualForm" class="credential-form">
+        <label for="manualSsid">SSID / username</label>
+        <input id="manualSsid" name="ssid" type="text" autocomplete="off"
+               placeholder="Enter Wi-Fi name" required />
+
+        <label for="manualPassword">Password</label>
+        <div class="password-field">
+          <input id="manualPassword" name="password" type="password"
+                 autocomplete="off" placeholder="Enter password" required />
+          <label class="show-password">
+            <input id="manualShowPassword" type="checkbox" />
+            <span>Show password</span>
+          </label>
+        </div>
+
+        <button class="primary-button" type="submit">
+          <span>Submit</span>
+          <span aria-hidden="true">↗</span>
+        </button>
+      </form>
+      <p class="form-message" id="manualMessage" role="status"></p>
+    </section>
+
+    <section class="networks-section" aria-labelledby="networksTitle">
+      <div class="section-heading networks-heading">
+        <div>
+          <h2 id="networksTitle">Available networks</h2>
+          <p id="networkMeta">Scanning nearby networks...</p>
+        </div>
+        <button class="small-button" id="refreshButton" type="button" aria-label="Refresh networks">↻</button>
+      </div>
+
+      <div id="networkList" class="network-list" aria-live="polite"></div>
+      <div id="networkEmpty" class="empty-state hidden">
+        <strong>No networks found.</strong>
+        <span>Try scanning again.</span>
+      </div>
+    </section>
+
+    <footer class="footer-note">
+      <span class="status-dot"></span>
+      <span>Local device interface · No cloud required</span>
+    </footer>
+  </main>
+
+  <div class="modal-backdrop hidden" id="modalBackdrop">
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-header">
+        <h2 id="modalTitle">Device information</h2>
+        <button class="close-button" id="closeModalButton" type="button" aria-label="Close popup">×</button>
+      </div>
+      <div id="modalContent"></div>
+    </section>
+  </div>
+
+  <template id="networkCardTemplate">
+    <button class="network-card" type="button">
+      <div class="network-card-main">
+        <div class="network-icon" aria-hidden="true">⌁</div>
+        <div class="network-details">
+          <strong class="network-name"></strong>
+          <span class="network-security"></span>
+        </div>
+      </div>
+      <div class="network-signal">
+        <span class="signal-bars" aria-hidden="true"></span>
+        <span class="network-rssi"></span>
+      </div>
+    </button>
+  </template>
+
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
