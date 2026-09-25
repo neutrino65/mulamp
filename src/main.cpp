@@ -188,12 +188,13 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
 } 
 
 // sending the device current relay's status to mqtt broker 
-void sendMqttDeviceRelayStatusMsg() {      // data will be sent in form of json to the broker.
+void sendMqttDeviceRelayStatusMsg(String trigger_method) {      // data will be sent in form of json to the broker.
   if (mqtt_client.connected()) {
   JsonDocument doc;
   doc["device_id"] = ESP_DEVICE_ID;
   doc["relay_status"] = device_relay_status ? "HIGH" : "LOW";
   doc["timestamp"] = getCurrentTime();
+  doc["triggered_via"] = trigger_method;
 
   String mqttPayload;
   serializeJson(doc, mqttPayload);
@@ -206,6 +207,36 @@ void sendMqttDeviceRelayStatusMsg() {      // data will be sent in form of json 
 
 
 // --------------- Relay & Button ----------------
+
+void saveDeviceRelayStatusToFile() {
+  File file = LittleFS.open("/relay_config.json", "r");
+  // if file does not exist then create file and add relay's status.
+  if (!file) {
+    // creating file.
+    file = LittleFS.open("/relay_config.json", "w");
+    // saving the relay's current status.
+    JsonDocument doc;
+    doc["relay_status"] = device_relay_status;
+    serializeJson(doc, file);
+    file.close();
+    Serial.print("Device Relay Status saved to file >> ");
+    Serial.println(doc.as<String>());
+    return;
+  }
+  // file exist, so update the relay status in the file.s
+  JsonDocument doc;
+  DeserializationError err = deserializeJson(doc, file);
+  if (!err) {
+    doc["relay_status"] = device_relay_status;
+    // saving the updated json into file.
+    file.close();
+    file = LittleFS.open("/relay_config.json", "w");
+    serializeJson(doc, file);
+    file.close();
+    Serial.print("Device Relay Status updated in file >> ");
+    Serial.println(doc.as<String>());
+  }
+}
 
 const unsigned long DEBOUNSE_MS = 50;
 int lastButtonRaw = HIGH;  // HIGH cuz input_pullup was used, as initial pullup state is HIGH. Thus when button get pressed this turn to LOW.
@@ -230,9 +261,12 @@ void buttonToggleRelay() {   // this function check if the button is pressed and
       Serial.print("Button pressed. Relay now: ");
       Serial.println(device_relay_status ? "ON" : "OFF");
 
+      // saving the updated relay's status to relay_config file.
+      saveDeviceRelayStatusToFile();
+
       Serial.println("Sending the updated relay state mqtt message: ");
       // sending the updated device_relay_status to mqtt broker.
-      sendMqttDeviceRelayStatusMsg();     
+      sendMqttDeviceRelayStatusMsg("Button");     // passing "Button" cuz here the relay was triggered via button.
     }
     lastPressedState = pressed;   // updating the button's last pressed state.
   }
@@ -244,6 +278,9 @@ void updateDeviceRelay(const char* tmp_relay_status) {
 
   device_relay_status = (strcmp(tmp_relay_status, "HIGH") == 0);
   digitalWrite(RELAY_PIN, device_relay_status ? HIGH : LOW);
+
+  // saving the updated relay's status to relay_config file.
+  saveDeviceRelayStatusToFile();
 
   Serial.print("Updated relay to ");
   Serial.print(digitalRead(RELAY_PIN));
@@ -581,7 +618,7 @@ void setup(){
       else updateDeviceRelay("LOW");
       // sending the updated relay's status to MQTT Broker.
       Serial.println("Sending the updated relay status (via Logo button) to MQTT Broker!");
-      sendMqttDeviceRelayStatusMsg();
+      sendMqttDeviceRelayStatusMsg("webInterface");          // passing "webInterface" cuz here the relay was triggered by POST request that esp got from web interface (WifiAPWebPortal).
       // create response for browser.
       JsonDocument responseDoc;
       responseDoc["success"] = true;

@@ -42,7 +42,8 @@ def create_table(conn, table_name) -> None:
                 reading_no SERIAL PRIMARY KEY,
                 device_id INT NOT NULL,
                 relay_status TEXT NOT NULL,
-                timestamp TIMESTAMPTZ NOT NULL
+                timestamp TIMESTAMPTZ NOT NULL,
+                triggered_via TEXT NOT NULL
             );
         """)
         print("Table created successfully!!")
@@ -59,9 +60,9 @@ def create_table(conn, table_name) -> None:
 def insert_into_table(conn, table_name, doc : dict) -> None:
     with conn.cursor() as cur:
         cur.execute(f"""
-            INSERT INTO {table_name} (device_id, relay_status, timestamp)
-            VALUES (%s, %s, %s);
-        """, (doc["device_id"], doc["relay_status"], doc["timestamp"])
+            INSERT INTO {table_name} (device_id, relay_status, timestamp, triggered_via)
+            VALUES (%s, %s, %s, %s);
+        """, (doc["device_id"], doc["relay_status"], doc["timestamp"], doc["triggered_via"])
         )
 
     print(f"values inserted to {TABLE_NAME} successfully!!")
